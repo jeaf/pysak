@@ -209,7 +209,6 @@ class SqliteTable(object):
   @classmethod
   def connect(cls, db_path, *tables_to_create):
     conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
     for table_class in tables_to_create:
       assert issubclass(table_class, cls)
       table_class.colnames = [c[0] for c in table_class.columns]

@@ -205,12 +205,6 @@ class DataStore(object):
     return self.setdata(key, buf)
 
 class SqliteTable(object):
-  def __init__(self, **kwargs):
-    assert set(kwargs.keys()).issubset(self.colnames)
-    [setattr(self, key, val) for key,val in kwargs.iteritems()]
-  
-  def __repr__(self):
-    return '<{} row {}>'.format(self.__class__.__name__, ['{}={}'.format(k,v) for k,v in self.__dict__.iteritems()])
 
   @classmethod
   def connect(cls, db_path, *tables_to_create):
@@ -236,23 +230,18 @@ class SqliteTable(object):
     return conn
 
   @classmethod
-  def select(cls, conn, **kwargs):
+  def select(cls, conn, cols, **kwargs):
     assert set(kwargs.keys()).issubset(cls.colnames)
-    query_str = 'SELECT * FROM tbl_{}'.format(cls.__name__)
+    if not cols:
+      cols = '*'
+    query_str = 'SELECT {} FROM tbl_{}'.format(cols, cls.__name__)
     if kwargs:
       query_str += ' WHERE '
       query_str += ' AND '.join('{}=?'.format(kw) for kw in kwargs)
     query_str += ';'
     if trace_sql:
       print query_str, kwargs.values()
-    return [cls(**row) for row in conn.execute(query_str, kwargs.values()).fetchall()]
-
-  @classmethod
-  def selectone(cls, conn, **kwargs):
-    rows = cls.select(conn, **kwargs)
-    if len(rows) > 0:
-      return rows[0]
-    return None
+    return conn.execute(query_str, kwargs.values())
 
   @classmethod
   def exists(cls, conn, **kwargs):

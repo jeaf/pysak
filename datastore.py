@@ -36,6 +36,7 @@ todo: check all imports if they are still necessary
 Copyright (c) 2012, Francois Jeannotte.
 """
 
+import apsw
 import binascii
 import bz2
 import contextlib
@@ -46,7 +47,6 @@ import hashlib
 import itertools
 import os
 import os.path
-import sqlite3
 import time
 import timeit
 import util
@@ -208,7 +208,7 @@ class SqliteTable(object):
 
   @classmethod
   def connect(cls, db_path, *tables_to_create):
-    conn = sqlite3.connect(db_path)
+    conn = apsw.Connection(db_path)
     for table_class in tables_to_create:
       assert issubclass(table_class, cls)
       table_class.colnames = [c[0] for c in table_class.columns]
@@ -221,7 +221,7 @@ class SqliteTable(object):
       if trace_sql:
         print query_str
       with conn:
-        conn.execute(query_str)
+        conn.cursor().execute(query_str)
       if hasattr(table_class, 'default_rows'):
         for row in table_class.default_rows:
           if not table_class.exists(**row):
@@ -240,7 +240,7 @@ class SqliteTable(object):
     query_str += ';'
     if trace_sql:
       print query_str, kwargs.values()
-    return conn.execute(query_str, kwargs.values())
+    return conn.cursor().execute(query_str, kwargs.values())
 
   @classmethod
   def exists(cls, conn, **kwargs):
@@ -268,7 +268,7 @@ class SqliteTable(object):
     if trace_sql:
       print query, cols, tuples
     with conn:
-      conn.executemany(query, tuples)
+      conn.cursor().executemany(query, tuples)
 
   @classmethod
   def update(cls, conn, key_cols, val_cols, insert_missing=False):
@@ -293,7 +293,7 @@ class SqliteTable(object):
         print query
         print val_cols.values() + key_cols.values()
       with conn:
-        conn.execute(query, val_cols.values() + key_cols.values())
+        conn.cursor().execute(query, val_cols.values() + key_cols.values())
 
   @classmethod
   def updatemany(cls, conn, val_cols, key_cols, tuples):
@@ -306,7 +306,7 @@ class SqliteTable(object):
     if trace_sql:
       print query, tuples
     with conn:
-      conn.executemany(query, tuples)
+      conn.cursor().executemany(query, tuples)
 
   @classmethod
   def delete(cls, conn, **kwargs):
@@ -319,7 +319,7 @@ class SqliteTable(object):
     if trace_sql:
       print query_str, kwargs.values()
     with conn:
-      conn.execute(query_str, kwargs.values())
+      conn.cursor().execute(query_str, kwargs.values())
 
   @classmethod
   def deletemany(cls, conn, cols, tuples):
@@ -332,11 +332,11 @@ class SqliteTable(object):
     if trace_sql:
       print query_str, tuples
     with conn:
-      conn.executemany(query_str, tuples)
+      conn.cursor().executemany(query_str, tuples)
 
   @classmethod
   def count_rows(cls, conn):
-    return conn.execute('SELECT COUNT(*) FROM tbl_{}'.format(cls.__name__)).fetchone()[0]
+    return conn.cursor().execute('SELECT COUNT(*) FROM tbl_{}'.format(cls.__name__)).fetchone()[0]
 
 class DB_table(SqliteTable):
   columns = [('id'         , 'INTEGER PRIMARY KEY' ), 
@@ -353,7 +353,7 @@ class DB(DataStore):
     self._priv['_db_path'] = db_path
     self._priv['_conn']    = SqliteTable.connect(db_path, DB_table)
     if not DB_table.exists(self._conn, key='id'):
-      DB_table.insert(self._conn, key='id', value=sqlite3.Binary(uuid.uuid4().bytes), update_time=time.time())
+      DB_table.insert(self._conn, key='id', value=buffer(uuid.uuid4().bytes), update_time=time.time())
 
   def getid(self):
     return binascii.hexlify(DB_table.select(self._conn, key='id').value)
@@ -385,7 +385,7 @@ class DB(DataStore):
     if key[0] == '/':
       key = key[1:] # Remove unnecessary / at beginning of key
 
-    DB_table.update(self._conn, {'key':key}, {'value':sqlite3.Binary(data), 'update_time':time.time()}, insert_missing=True)
+    DB_table.update(self._conn, {'key':key}, {'value':buffer(data), 'update_time':time.time()}, insert_missing=True)
 
   def listkeys(self, prefix=None):
     return dict((row.key, row.update_time) for row in DB_table.select(self._conn))
